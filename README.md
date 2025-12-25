@@ -16,7 +16,7 @@ A lightweight, Windows-like clipboard manager for GNOME on Wayland.
 - **Event-driven** - No polling, uses GPaste daemon
 
 ## Screenshots
-<img width="1040" height="900" alt="image" src="https://github.com/user-attachments/assets/10b74680-788f-4a86-a4fd-3e2f3356736c" />
+<img width="540" height="540" alt="image" src="https://github.com/user-attachments/assets/10b74680-788f-4a86-a4fd-3e2f3356736c" />
 
 
 
