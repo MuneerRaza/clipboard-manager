@@ -2,7 +2,6 @@
 
 A lightweight, Windows-like clipboard manager for GNOME on Wayland.
 
-![Memory Usage](https://img.shields.io/badge/Memory-~36MB-green)
 ![Platform](https://img.shields.io/badge/Platform-GNOME%20Wayland-blue)
 ![License](https://img.shields.io/badge/License-MIT-yellow)
 
@@ -13,21 +12,13 @@ A lightweight, Windows-like clipboard manager for GNOME on Wayland.
 - **Search** - Quickly filter clipboard history
 - **Keyboard navigation** - Arrow keys + Enter to select
 - **Click outside to close** - Just like Windows
-- **Lightweight** - Only ~36MB total memory usage
+- **Lightweight** - less memory usage
 - **Event-driven** - No polling, uses GPaste daemon
 
 ## Screenshots
+<img width="1040" height="900" alt="image" src="https://github.com/user-attachments/assets/10b74680-788f-4a86-a4fd-3e2f3356736c" />
 
-```
-┌────────────────────────────────────────┐
-│  [Search ...]                  [Clear] │
-├────────────────────────────────────────┤
-│  ▶ First copied item                   │
-│    Second copied item                  │
-│    Third copied item...                │
-│    ...                                 │
-└────────────────────────────────────────┘
-```
+
 
 ## Requirements
 
@@ -155,14 +146,6 @@ EOF
 │   - Works on Wayland (uses uinput)          │
 └─────────────────────────────────────────────┘
 ```
-
-## Memory Usage
-
-| Component | Memory |
-|-----------|--------|
-| GPaste daemon | ~34 MB |
-| ydotool daemon | ~2 MB |
-| **Total** | **~36 MB** |
 
 ## Uninstallation
 
