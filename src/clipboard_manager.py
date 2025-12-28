@@ -3,15 +3,18 @@
 Clipboard Manager UI for GNOME Wayland
 Uses GPaste daemon as backend (event-driven, no polling)
 Uses ydotool for auto-paste
+Supports text and images
 """
 
 import gi
 gi.require_version('Gtk', '4.0')
 gi.require_version('Gdk', '4.0')
-from gi.repository import Gtk, Gdk, Gio, GLib
+gi.require_version('GdkPixbuf', '2.0')
+from gi.repository import Gtk, Gdk, Gio, GLib, GdkPixbuf
 import subprocess
 import sys
 import os
+import re
 
 # Set ydotool socket path
 os.environ['YDOTOOL_SOCKET'] = '/tmp/.ydotool_socket'
@@ -19,6 +22,27 @@ os.environ['YDOTOOL_SOCKET'] = '/tmp/.ydotool_socket'
 
 class GPasteClient:
     """Interface to GPaste daemon via CLI"""
+
+    def __init__(self):
+        self.gpaste_images_dir = os.path.expanduser('~/.local/share/gpaste/images')
+        self.history_file = os.path.expanduser('~/.local/share/gpaste/history.xml')
+
+    def get_item_content(self, uuid, kind="Text"):
+        """Get actual content from history.xml for a given UUID"""
+        try:
+            with open(self.history_file, 'r') as f:
+                content = f.read()
+                pattern = rf'<item kind="{kind}" uuid="{uuid}"[^>]*>.*?<value><!\[CDATA\[(.*?)\]\]></value>'
+                match = re.search(pattern, content, re.DOTALL)
+                if match:
+                    return match.group(1)
+        except Exception:
+            pass
+        return None
+
+    def get_image_path(self, uuid):
+        """Get image file path from history.xml"""
+        return self.get_item_content(uuid, "Image")
 
     def get_history(self, limit=50):
         """Get clipboard history from GPaste"""
@@ -41,7 +65,24 @@ class GPasteClient:
                         uuid = parts[0].strip()
                         content = parts[1].strip()
                         if content:
-                            entries.append({'index': i, 'uuid': uuid, 'content': content})
+                            # Check if it's an image
+                            is_image = content.startswith('[Image,')
+                            image_path = None
+                            if is_image:
+                                image_path = self.get_image_path(uuid)
+                            # Get actual content with newlines preserved
+                            actual_content = content
+                            if not is_image:
+                                real_content = self.get_item_content(uuid, "Text")
+                                if real_content:
+                                    actual_content = real_content
+                            entries.append({
+                                'index': i,
+                                'uuid': uuid,
+                                'content': actual_content,
+                                'is_image': is_image,
+                                'image_path': image_path
+                            })
             return entries
         except Exception:
             return []
@@ -82,6 +123,7 @@ class ClipboardOverlay(Gtk.ApplicationWindow):
 
         self.build_ui()
         self.load_css()
+
 
         # Keyboard controller
         key_controller = Gtk.EventControllerKey()
@@ -141,69 +183,92 @@ class ClipboardOverlay(Gtk.ApplicationWindow):
     def load_css(self):
         css_provider = Gtk.CssProvider()
         css = """
+        window.clipboard-window,
         .clipboard-window {
-            background: #1a2026;
+            background-color: #14161c;
             border-radius: 16px;
-            border: 1px solid #2a3540;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        window.clipboard-window > * {
+            border-radius: 16px;
         }
 
         .search-entry {
-            background: #232b33;
-            color: #7a8a94;
+            background: rgba(255, 255, 255, 0.06);
+            color: rgba(255, 255, 255, 0.95);
             border-radius: 10px;
-            padding: 14px 16px;
-            font-size: 13px;
-            min-height: 24px;
-            border: 1px solid #2a3540;
+            padding: 8px 14px;
+            font-size: 14px;
+            min-height: 18px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .search-entry:focus {
-            border: 1px solid #3a4a55;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(100, 160, 255, 0.4);
         }
 
         .clipboard-list {
             background: transparent;
         }
 
+        scrollbar {
+            opacity: 0;
+        }
+
         .clipboard-list row {
-            background: #252d36;
-            border-radius: 10px;
-            margin: 8px 0;
-            padding: 16px;
-            color: #b0c0cc;
-            min-height: 40px;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 12px;
+            margin: 4px 0;
+            padding: 12px 16px;
+            color: rgba(255, 255, 255, 0.9);
+            min-height: 28px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
         }
 
         .clipboard-list row:hover {
-            background: #2d3842;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
         }
 
         .clipboard-list row:selected {
-            background: #354550;
+            background: rgba(100, 160, 255, 0.12);
+            border: 1px solid rgba(100, 160, 255, 0.3);
         }
 
         .clipboard-text {
             font-size: 13px;
-            color: #b0c0cc;
+            font-weight: 400;
+            color: rgba(255, 255, 255, 0.88);
+            line-height: 1.5;
         }
 
         .clear-button {
-            background: #3a2530;
-            color: #e07080;
+            background: rgba(255, 90, 90, 0.15);
+            color: #ff9090;
             border-radius: 10px;
-            padding: 10px 16px;
-            font-size: 12px;
-            border: 1px solid #4a3540;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 500;
+            border: 1px solid rgba(255, 100, 100, 0.25);
         }
 
         .clear-button:hover {
-            background: #4a3040;
+            background: rgba(255, 90, 90, 0.25);
+            border: 1px solid rgba(255, 100, 100, 0.4);
         }
 
         .empty-label {
-            color: #5a6a74;
+            color: rgba(255, 255, 255, 0.35);
             font-size: 14px;
-            padding: 40px;
+            font-weight: 400;
+            padding: 60px;
+        }
+
+        .image-thumbnail {
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
         }
         """
         css_provider.load_from_string(css)
@@ -239,19 +304,56 @@ class ClipboardOverlay(Gtk.ApplicationWindow):
             self.listbox.append(row)
         else:
             for entry in entries:
-                content = entry['content']
-                label = Gtk.Label()
-                display_text = content[:100] + ("..." if len(content) > 100 else "")
-                display_text = display_text.replace('\n', ' ')
-                label.set_text(display_text)
-                label.set_xalign(0)
-                label.set_wrap(True)
-                label.set_max_width_chars(60)
-                label.add_css_class("clipboard-text")
-
                 row = Gtk.ListBoxRow()
-                row.set_child(label)
                 row.item_index = entry['index']
+                row.is_image = entry.get('is_image', False)
+
+                if entry.get('is_image') and entry.get('image_path'):
+                    # Image entry - show thumbnail
+                    image_path = entry['image_path']
+                    if os.path.exists(image_path):
+                        try:
+                            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                                image_path,
+                                width=460,
+                                height=200,
+                                preserve_aspect_ratio=True
+                            )
+                            texture = Gdk.Texture.new_for_pixbuf(pixbuf)
+                            image = Gtk.Picture.new_for_paintable(texture)
+                            image.set_content_fit(Gtk.ContentFit.CONTAIN)
+                            image.set_can_shrink(False)
+                            image.add_css_class("image-thumbnail")
+                            row.set_child(image)
+                        except Exception:
+                            label = Gtk.Label(label="Image")
+                            label.add_css_class("clipboard-text")
+                            row.set_child(label)
+                    else:
+                        label = Gtk.Label(label="Image")
+                        label.add_css_class("clipboard-text")
+                        row.set_child(label)
+                else:
+                    # Text entry - show up to 2 lines with proper newlines
+                    content = entry['content']
+                    lines = content.split('\n')
+                    display_lines = []
+                    for line in lines[:2]:
+                        clean_line = ' '.join(line.split())  # Clean each line
+                        if len(clean_line) > 70:
+                            clean_line = clean_line[:70] + "..."
+                        if clean_line:
+                            display_lines.append(clean_line)
+                    display_text = '\n'.join(display_lines) if display_lines else content[:70]
+                    if len(lines) > 2:
+                        display_text += " ..."
+                    label = Gtk.Label(label=display_text)
+                    label.set_xalign(0)
+                    label.set_yalign(0)
+                    label.set_max_width_chars(70)
+                    label.add_css_class("clipboard-text")
+                    row.set_child(label)
+
                 self.listbox.append(row)
 
             # Select first item by default
@@ -317,7 +419,10 @@ class ClipboardOverlay(Gtk.ApplicationWindow):
     def show_overlay(self):
         self.load_clipboard_items()
         self.present()
-        self.search_entry.grab_focus()
+        # Focus first item so Enter pastes immediately
+        first_row = self.listbox.get_row_at_index(0)
+        if first_row and first_row.get_activatable():
+            first_row.grab_focus()
 
 
 class ClipboardManager(Gtk.Application):
