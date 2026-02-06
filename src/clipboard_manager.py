@@ -44,7 +44,7 @@ class GPasteClient:
         """Get image file path from history.xml"""
         return self.get_item_content(uuid, "Image")
 
-    def get_history(self, limit=50):
+    def get_history(self, limit=30):
         """Get clipboard history from GPaste"""
         try:
             result = subprocess.run(
@@ -287,7 +287,7 @@ class ClipboardOverlay(Gtk.ApplicationWindow):
             self.listbox.remove(row)
 
         # Get from GPaste
-        entries = self.gpaste.get_history(limit=50)
+        entries = self.gpaste.get_history(limit=30)
 
         # Filter by search if needed
         if search_query:
