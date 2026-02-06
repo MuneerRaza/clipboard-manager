@@ -15,6 +15,7 @@ import subprocess
 import sys
 import os
 import re
+import html
 
 # Set ydotool socket path
 os.environ['YDOTOOL_SOCKET'] = '/tmp/.ydotool_socket'
@@ -27,22 +28,20 @@ class GPasteClient:
         self.gpaste_images_dir = os.path.expanduser('~/.local/share/gpaste/images')
         self.history_file = os.path.expanduser('~/.local/share/gpaste/history.xml')
 
-    def get_item_content(self, uuid, kind="Text"):
-        """Get actual content from history.xml for a given UUID"""
+    def _parse_image_paths(self):
+        """Read history.xml once and extract all image paths into a dict"""
+        paths = {}
         try:
             with open(self.history_file, 'r') as f:
-                content = f.read()
-                pattern = rf'<item kind="{kind}" uuid="{uuid}"[^>]*>.*?<value><!\[CDATA\[(.*?)\]\]></value>'
-                match = re.search(pattern, content, re.DOTALL)
-                if match:
-                    return match.group(1)
+                xml_content = f.read()
+            for match in re.finditer(
+                r'<item kind="Image" uuid="([^"]+)"[^>]*>.*?<value><!\[CDATA\[(.*?)\]\]></value>',
+                xml_content, re.DOTALL
+            ):
+                paths[match.group(1)] = match.group(2)
         except Exception:
             pass
-        return None
-
-    def get_image_path(self, uuid):
-        """Get image file path from history.xml"""
-        return self.get_item_content(uuid, "Image")
+        return paths
 
     def get_history(self, limit=30):
         """Get clipboard history from GPaste"""
@@ -57,6 +56,7 @@ class GPasteClient:
                 return []
 
             entries = []
+            image_paths = None
             lines = result.stdout.strip().split('\n')
             for i, line in enumerate(lines[:limit]):
                 if ':' in line:
@@ -65,21 +65,16 @@ class GPasteClient:
                         uuid = parts[0].strip()
                         content = parts[1].strip()
                         if content:
-                            # Check if it's an image
                             is_image = content.startswith('[Image,')
                             image_path = None
                             if is_image:
-                                image_path = self.get_image_path(uuid)
-                            # Get actual content with newlines preserved
-                            actual_content = content
-                            if not is_image:
-                                real_content = self.get_item_content(uuid, "Text")
-                                if real_content:
-                                    actual_content = real_content
+                                if image_paths is None:
+                                    image_paths = self._parse_image_paths()
+                                image_path = image_paths.get(uuid)
                             entries.append({
                                 'index': i,
                                 'uuid': uuid,
-                                'content': actual_content,
+                                'content': html.unescape(content),
                                 'is_image': is_image,
                                 'image_path': image_path
                             })
@@ -334,19 +329,19 @@ class ClipboardOverlay(Gtk.ApplicationWindow):
                         label.add_css_class("clipboard-text")
                         row.set_child(label)
                 else:
-                    # Text entry - show up to 2 lines with proper newlines
+                    # Text entry - show up to 4 lines preview
                     content = entry['content']
                     lines = content.split('\n')
                     display_lines = []
-                    for line in lines[:2]:
-                        clean_line = ' '.join(line.split())  # Clean each line
+                    for line in lines[:4]:
+                        clean_line = ' '.join(line.split())
                         if len(clean_line) > 70:
                             clean_line = clean_line[:70] + "..."
                         if clean_line:
                             display_lines.append(clean_line)
                     display_text = '\n'.join(display_lines) if display_lines else content[:70]
-                    if len(lines) > 2:
-                        display_text += " ..."
+                    if len(lines) > 4:
+                        display_text += "\n..."
                     label = Gtk.Label(label=display_text)
                     label.set_xalign(0)
                     label.set_yalign(0)
