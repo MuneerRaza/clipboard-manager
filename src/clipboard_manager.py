@@ -131,8 +131,8 @@ class ClipboardOverlay(Gtk.ApplicationWindow):
         self.add_controller(focus_controller)
 
     def on_focus_lost(self, controller):
-        """Close when clicking outside"""
-        self.close()
+        """Hide when clicking outside"""
+        self.set_visible(False)
 
     def build_ui(self):
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12)
@@ -375,14 +375,14 @@ class ClipboardOverlay(Gtk.ApplicationWindow):
                 stderr=subprocess.DEVNULL,
                 env={**os.environ, 'YDOTOOL_SOCKET': '/tmp/.ydotool_socket'}
             )
-            self.close()
+            self.set_visible(False)
 
     def on_row_activated(self, listbox, row):
         self.paste_and_close(row)
 
     def on_key_pressed(self, controller, keyval, keycode, state):
         if keyval == Gdk.KEY_Escape:
-            self.close()
+            self.set_visible(False)
             return True
 
         elif keyval == Gdk.KEY_Return or keyval == Gdk.KEY_KP_Enter:
@@ -429,6 +429,7 @@ class ClipboardManager(Gtk.Application):
     def do_activate(self):
         if not self.overlay:
             self.overlay = ClipboardOverlay(self)
+            self.hold()  # Keep app alive in background after window hides
         self.overlay.show_overlay()
 
 
